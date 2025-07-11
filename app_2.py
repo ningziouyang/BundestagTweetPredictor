@@ -394,7 +394,7 @@ if predict_clicked and st.session_state["input_tweet"].strip():
                 if shap_val > 0:
                     st.write(f"🟢 **'{word}'** → +{shap_val:.6f}")
                 else:
-                    st.write(f"🔴 **'{word}'** → {shap_val:.6f}")
+                    t pushst.write(f"🔴 **'{word}'** → {shap_val:.6f}")
     
         # Zeige Tweet-Eigenschaften mit niedrigerer Schwelle
         st.write("**🔧 Tweet-Eigenschaften:**")
@@ -431,7 +431,7 @@ if predict_clicked and st.session_state["input_tweet"].strip():
     feature_impacts.sort(key=lambda x: abs(x[1]), reverse=True)
     
     for i, (feature, shap_val) in enumerate(feature_impacts[:10]):
-        if shap_val > 0:
+        if float(shap_val) > 0:
             st.write(f"{i+1}. 🟢 **{feature}** → +{shap_val:.6f}")
         else:
             st.write(f"{i+1}. 🔴 **{feature}** → {shap_val:.6f}")
