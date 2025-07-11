@@ -8,3 +8,4 @@ numpy
 emoji
 shap
 matplotlib
+seaborn
