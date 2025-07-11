@@ -126,9 +126,14 @@ scaler = joblib.load(info["scaler"]) if info["scaler"] else None
 use_bert = "BERT" in choice
 
 if use_bert:
-    tokenizer = AutoTokenizer.from_pretrained("bert-base-german-cased")
-    bert_model = AutoModel.from_pretrained("bert-base-german-cased")
-    bert_model.eval()
+    # 仅在需要时加载BERT模型和tokenizer，避免不必要的内存占用
+    @st.cache_resource
+    def load_bert_model():
+        tokenizer = AutoTokenizer.from_pretrained("bert-base-german-cased")
+        bert_model = AutoModel.from_pretrained("bert-base-german-cased")
+        bert_model.eval()
+        return tokenizer, bert_model
+    tokenizer, bert_model = load_bert_model()
 
 # ==== Feature-Extraktion ====
 POLITICAL_TERMS = [
@@ -152,9 +157,9 @@ def is_retweet(text): return int(str(text).strip().lower().startswith("rt @"))
 
 def extract_features(text):
     return np.array([[len(str(text)), len(str(text).split()), avg_word_length(text), uppercase_ratio(text),
-                      str(text).count("!"), str(text).count("?"), multi_punct_count(text), count_political_terms(text),
-                      count_emojis(text), count_hashtags(text), count_mentions(text), count_urls(text),
-                      count_dots(text), is_retweet(text)]])
+                     str(text).count("!"), str(text).count("?"), multi_punct_count(text), count_political_terms(text),
+                     count_emojis(text), count_hashtags(text), count_mentions(text), count_urls(text),
+                     count_dots(text), is_retweet(text)]])
 
 def extract_extra_features(text):
     return np.array([[count_emojis(text), count_hashtags(text), count_mentions(text), count_urls(text)]])
@@ -166,36 +171,46 @@ def embed_single_text(text):
         return output.last_hidden_state[:, 0, :].squeeze().cpu().numpy().reshape(1, -1)
 
 # ==== UI: Text + Thema + Buttons ====
-if "input_area" not in st.session_state:
-    st.session_state["input_area"] = ""
+# 确保 session_state['input_tweet'] 在使用前被初始化
+if "input_tweet" not in st.session_state:
+    st.session_state["input_tweet"] = "" # 初始值为空字符串
 
 thema = st.selectbox("📂 Wähle ein Thema:", list(SAMPLE_TWEET_CATEGORIES.keys()))
 
 col1, col2 = st.columns([3, 1])
 with col1:
-    tweet = st.text_area(
+    # 文本区域的key直接绑定到session_state，并且初始值从session_state获取
+    current_tweet_input = st.text_area(
         label="",
         placeholder="Gib einen Bundestags-Tweet ein...",
         height=100,
         label_visibility="collapsed",
-        key="input_area"
+        value=st.session_state["input_tweet"], # 使用 session_state 的值作为初始值
+        key="input_tweet_widget" # 给文本区域一个不同的key，避免和session_state的key混淆
     )
+    # 如果用户直接在文本框输入，更新 session_state
+    st.session_state["input_tweet"] = current_tweet_input
+
 with col2:
     if st.button("🔄 Beispiel-Tweet laden"):
-        st.session_state["input_area"] = random.choice(SAMPLE_TWEET_CATEGORIES[thema])
+        # 当按钮点击时，更新 session_state 中的 input_tweet
+        st.session_state["input_tweet"] = random.choice(SAMPLE_TWEET_CATEGORIES[thema])
+        # Streamlit 会自动重新运行脚本以反映 session_state 的变化
 
 predict_clicked = st.button("🔮 Vorhersagen")
 
-if predict_clicked and tweet.strip():
-    X_tfidf = vectorizer.transform([tweet])
+if predict_clicked and st.session_state["input_tweet"].strip(): # 使用 session_state['input_tweet'] 进行预测
+    tweet_to_predict = st.session_state["input_tweet"]
+
+    X_tfidf = vectorizer.transform([tweet_to_predict])
 
     X_eng_scaled = None
     if scaler:
-        X_eng = extract_extra_features(tweet) if "Extra Features" in choice else extract_features(tweet)
+        X_eng = extract_extra_features(tweet_to_predict) if "Extra Features" in choice else extract_features(tweet_to_predict)
         X_eng_scaled = scaler.transform(X_eng)
 
     if use_bert:
-        X_bert = embed_single_text(tweet)
+        X_bert = embed_single_text(tweet_to_predict)
         X_all = np.hstack([X_tfidf.toarray(), X_bert, X_eng_scaled])
     elif scaler:
         X_all = np.hstack([X_tfidf.toarray(), X_eng_scaled])
@@ -210,13 +225,19 @@ if predict_clicked and tweet.strip():
 
     if hasattr(model, "predict_proba"):
         probs = model.predict_proba(X_all)[0]
+        # 创建一个包含概率、类别和颜色的DataFrame
         df = pd.DataFrame({
             "Partei": model.classes_,
             "Wahrscheinlichkeit": probs,
             "Farbe": [PARTY_COLORS.get(p, "#aaaaaa") for p in model.classes_]
         })
+        # 按照概率降序排序，使图表更清晰
+        df = df.sort_values(by="Wahrscheinlichkeit", ascending=False)
+
 
         st.subheader("📊 Vorhersagewahrscheinlichkeit")
+        # Streamlit的bar_chart不支持直接传入颜色，所以如果需要自定义颜色，需要使用plotly或其他库。
+        # 这里为了简化，直接使用Streamlit内置的bar_chart
         st.bar_chart(data=df.set_index("Partei")["Wahrscheinlichkeit"])
 
 st.markdown("---")
