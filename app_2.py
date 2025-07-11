@@ -349,7 +349,10 @@ if predict_clicked and st.session_state["input_tweet"].strip():
         st.write(f"**Die wichtigsten Faktoren für die Vorhersage '{pred}':**")
         
         for i, (feature_name, shap_val, feature_val) in enumerate(top_features, 1):
+            if not isinstance(shap_val, (int, float)):
+                shap_val = 0
             impact = "🟢 Positiv" if shap_val > 0 else "🔴 Negativ"
+
             
             # Vereinfache Feature-Namen für bessere Lesbarkeit
             if feature_name.startswith("tfidf_"):
