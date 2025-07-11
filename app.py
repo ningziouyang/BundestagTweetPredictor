@@ -94,30 +94,13 @@ def count_dots(text): return len(re.findall(r"\.\.+", str(text)))
 def is_retweet(text): return int(str(text).strip().lower().startswith("rt @"))
 
 def extract_features(text):
-    return np.array([[
-        len(str(text)),
-        len(str(text).split()),
-        avg_word_length(text),
-        uppercase_ratio(text),
-        str(text).count("!"),
-        str(text).count("?"),
-        multi_punct_count(text),
-        count_political_terms(text),
-        count_emojis(text),
-        count_hashtags(text),
-        count_mentions(text),
-        count_urls(text),
-        count_dots(text),
-        is_retweet(text),
-    ]])
+    return np.array([[len(str(text)), len(str(text).split()), avg_word_length(text), uppercase_ratio(text),
+                      str(text).count("!"), str(text).count("?"), multi_punct_count(text), count_political_terms(text),
+                      count_emojis(text), count_hashtags(text), count_mentions(text), count_urls(text),
+                      count_dots(text), is_retweet(text)]])
 
 def extract_extra_features(text):
-    return np.array([[
-        count_emojis(text),
-        count_hashtags(text),
-        count_mentions(text),
-        count_urls(text)
-    ]])
+    return np.array([[count_emojis(text), count_hashtags(text), count_mentions(text), count_urls(text)]])
 
 def embed_single_text(text):
     with torch.no_grad():
@@ -127,9 +110,9 @@ def embed_single_text(text):
 
 # ==== UI ====
 tweet = st.text_area("", placeholder="Gib einen Bundestags-Tweet ein...", height=100)
-st.button("🔮 Vorhersagen", disabled=not tweet)
+predict_clicked = st.button("🔮 Vorhersagen")
 
-if tweet:
+if predict_clicked and tweet.strip():
     X_tfidf = vectorizer.transform([tweet])
 
     X_eng_scaled = None
