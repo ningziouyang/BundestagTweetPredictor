@@ -329,7 +329,7 @@ if predict_clicked and st.session_state["input_tweet"].strip():
                 for tweet in category
             ]
             background_vectors = vectorizer.transform(background_texts).toarray()
-            explainer = shap.Explainer(model.predict, background_vectors)
+            explainer = shap.Explainer(model, background_vectors)
             return explainer
         
         explainer = prepare_shap_explainer_tfidf()
