@@ -323,11 +323,18 @@ if predict_clicked and st.session_state["input_tweet"].strip():
     with st.spinner("Generiere Erklärung..."):
         @st.cache_resource
         def prepare_shap_explainer_tfidf():
-            explainer = shap.Explainer(model, vectorizer.transform)
+            background_texts = [
+                tweet
+                for category in SAMPLE_TWEET_CATEGORIES.values()
+                for tweet in category
+            ]
+            background_vectors = vectorizer.transform(background_texts).toarray()
+            explainer = shap.Explainer(model.predict, background_vectors)
             return explainer
         
         explainer = prepare_shap_explainer_tfidf()
-        shap_values = explainer([tweet_to_predict])
+        X_tfidf = vectorizer.transform([tweet_to_predict]).toarray()
+        shap_values = explainer(X_tfidf)
 
         # Visualisierung (in Streamlit)
         st.subheader("🔍 Einflussreiche Wörter laut SHAP (TF-IDF)")
