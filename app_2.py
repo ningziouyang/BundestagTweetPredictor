@@ -402,27 +402,6 @@ if predict_clicked and st.session_state["input_tweet"].strip():
     with st.spinner("Analysiere Einflüsse..."):
         # Zeige gefundene Wörter und Erklärung
         matching_keywords = explain_prediction_simple(found_words, pred, tweet_to_predict)
-        
-        # Zeige Tweet-Eigenschaften wenn vorhanden
-        if tweet_properties:
-            st.write("**🔧 Auffällige Tweet-Eigenschaften:**")
-            for prop in tweet_properties[:5]:
-                st.write(f"• **{prop['name']}**: {prop['value']:.2f}")
-    
-    # Alternative: Zeige Wahrscheinlichkeiten aller Parteien als Erklärung
-    st.write("**📊 Vergleich mit anderen Parteien:**")
-    df_probs_detailed = pd.DataFrame({
-        "Partei": label_encoder.inverse_transform(range(len(probs))),
-        "Wahrscheinlichkeit": probs,
-        "Prozent": [f"{p:.1%}" for p in probs]
-    }).sort_values(by="Wahrscheinlichkeit", ascending=False)
-    
-    for index, row in df_probs_detailed.iterrows():
-        color = PARTY_COLORS.get(row['Partei'], "#aaaaaa")
-        if row['Partei'] == pred:
-            st.markdown(f"🎯 <span style='color:{color}; font-weight:bold;'>{row['Partei']}</span>: {row['Prozent']} ← **Vorhersage**", unsafe_allow_html=True)
-        else:
-            st.markdown(f"    <span style='color:{color};'>{row['Partei']}</span>: {row['Prozent']}", unsafe_allow_html=True)
     
     # Tweet-Analyse Metriken
     st.subheader("📝 Tweet-Analyse")
