@@ -323,11 +323,22 @@ if predict_clicked and st.session_state["input_tweet"].strip():
     with st.spinner("Generiere Erklärung..."):
         # SHAP Werte berechnen
         shap_values = explainer.shap_values(X_all)
-        
-        # Da XGBoost multi-class ist, sind shap_values eine Liste
-        predicted_class_idx = pred_encoded
-        shap_values_for_prediction = shap_values[predicted_class_idx][0]
-        
+       
+        # Prüfe die Struktur der SHAP Werte
+        if isinstance(shap_values, list):
+            # Multi-class Fall – nehme die Werte für die vorhergesagte Klasse
+            if len(shap_values) > pred_encoded:
+                shap_values_for_prediction = shap_values[pred_encoded][0]
+            else:
+                # Fallback: nehme die erste Klasse
+                shap_values_for_prediction = shap_values[0][0]
+        else:
+            # Binary Fall oder anderes Format
+            if len(shap_values.shape) == 2:
+                shap_values_for_prediction = shap_values[0]
+            else:
+                shap_values_for_prediction = shap_values
+
         # Top positive und negative Features identifizieren
         feature_importance = list(zip(feature_names, shap_values_for_prediction, X_all[0]))
         feature_importance.sort(key=lambda x: abs(x[1]), reverse=True)
