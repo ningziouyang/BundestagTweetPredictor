@@ -1,0 +1,8 @@
+streamlit
+scikit-learn
+joblib
+transformers
+torch
+pandas
+numpy
+emoji

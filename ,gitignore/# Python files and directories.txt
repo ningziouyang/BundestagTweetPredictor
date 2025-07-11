@@ -1,0 +1,27 @@
+# Python files and directories
+__pycache__/
+*.pyc
+.Python
+venv/
+env/
+
+# Jupyter Notebook specific files
+.ipynb_checkpoints/
+*.ipynb_checkpoints/
+
+# Data directories (if raw data is large or sensitive)
+data/raw/
+*.csv
+*.json
+*.parquet
+
+# IDE specific files
+.idea/
+.vscode/
+*.iml
+
+# Streamlit specific files
+.streamlit/local_configs/
+
+# Environment variables (if you use .env for secrets)
+.env
