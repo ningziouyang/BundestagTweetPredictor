@@ -330,7 +330,7 @@ if predict_clicked and st.session_state["input_tweet"].strip():
             ]
             background_vectors = vectorizer.transform(background_texts).toarray()
             explainer = shap.Explainer(model, background_vectors)
-            return explainer
+            return shap.Explainer(model, background_vectors)
         
         explainer = prepare_shap_explainer_tfidf()
         X_tfidf = vectorizer.transform([tweet_to_predict]).toarray()
