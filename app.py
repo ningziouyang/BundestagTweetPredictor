@@ -96,7 +96,7 @@ MODEL_OPTIONS = {
         * **Meist beste Leistung:** Bei den meisten Textklassifizierungsaufgaben erzielt dieses kombinierte Modell eine höhere Genauigkeit und Robustheit.
         
         **Nachteile:**
-        * **Hoher Rechenressourcenverbrauch:** BERT-Modelle sind groß und erfordern mehr Speicher und Rechenleistung (insbesondere GPUs) für das Laden und die Inferenz.
+        * **Hoher Rechenressourcenverbrauch:** BERT-Modelle sind groß und erfordern mehr Speicher und Rechenleistung (insbesondere GPUs).
         * **Langsames Training und Vorhersage:** Im Vergleich zu reinen TF-IDF-Modellen steigt die Trainings- und Vorhersagezeit erheblich.
         * **Hohe Modellkomplexität:** Besteht aus mehreren Komponenten, was das Debuggen und Optimieren relativ komplex macht.
         """
@@ -288,12 +288,22 @@ if predict_clicked and st.session_state["input_tweet"].strip(): # Nutzt den Twee
             "Wahrscheinlichkeit": probs,
             "Farbe": [PARTY_COLORS.get(p, "#aaaaaa") for p in model.classes_]
         })
-        # Nach Wahrscheinlichkeit absteigend sortieren für bessere Lesbarkeit
+        # Nach Wahrscheinlichkeit absteigend sortieren
         df = df.sort_values(by="Wahrscheinlichkeit", ascending=False)
 
-        st.subheader("📊 Vorhersagewahrscheinlichkeit")
-        # Balkendiagramm der Wahrscheinlichkeiten
-        st.bar_chart(data=df.set_index("Partei")["Wahrscheinlichkeit"])
+        st.subheader("📊 Vorhersagewahrscheinlichkeit (Top 3)")
+
+        # Die Top 3 Parteien anzeigen
+        top_3_parties = df.head(3)
+        for index, row in top_3_parties.iterrows():
+            st.markdown(
+                f"<span style='color:{row['Farbe']}; font-weight:bold;'>{row['Partei']}</span>: {row['Wahrscheinlichkeit']:.2%}",
+                unsafe_allow_html=True
+            )
+        
+        # Optional: Den vollständigen Balkenchart weiterhin anzeigen, wenn gewünscht
+        with st.expander("Vollständige Wahrscheinlichkeitsverteilung anzeigen"):
+            st.bar_chart(data=df.set_index("Partei")["Wahrscheinlichkeit"])
 
 st.markdown("---")
 st.caption("📌 Dieses Tool wurde im Rahmen des ML4B-Projekts entwickelt – zur Parteivorhersage deutscher Bundestags-Tweets.")
