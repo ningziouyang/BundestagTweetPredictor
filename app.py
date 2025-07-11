@@ -67,7 +67,6 @@ vectorizer = joblib.load(info["vectorizer"])
 scaler = joblib.load(info["scaler"]) if info["scaler"] else None
 use_bert = "BERT" in choice
 
-# ==== BERT laden ====
 if use_bert:
     tokenizer = AutoTokenizer.from_pretrained("bert-base-german-cased")
     bert_model = AutoModel.from_pretrained("bert-base-german-cased")
@@ -127,8 +126,9 @@ def embed_single_text(text):
 
 # ==== UI ====
 tweet = st.text_area("📝 Gib einen Bundestags-Tweet ein:", height=100)
+st.button("🔮 Vorhersagen", disabled=not tweet)
 
-if tweet and st.button("🔮 Vorhersagen"):
+if tweet:
     X_tfidf = vectorizer.transform([tweet])
 
     X_eng_scaled = None
@@ -147,11 +147,9 @@ if tweet and st.button("🔮 Vorhersagen"):
     pred = model.predict(X_all)[0]
     st.success(f"🟩 Vorhergesagte Partei: **{pred}**")
 
-    # Partei-Info
     with st.expander(f"🧭 Informationen über {pred}"):
         st.write(PARTY_INFOS.get(pred, "Keine Informationen verfügbar."))
 
-    # Wahrscheinlichkeit visualisieren
     if hasattr(model, "predict_proba"):
         probs = model.predict_proba(X_all)[0]
         df = pd.DataFrame({
