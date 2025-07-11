@@ -391,7 +391,7 @@ if predict_clicked and st.session_state["input_tweet"].strip():
     explanation_parts = []
     
     # Analysiere die wichtigsten TF-IDF Features
-    tfidf_features = [f for f in top_features if f[0].startswith("tfidf_") and np.abs(f[1]).item() > 0]
+    tfidf_features = [f for f in top_features if f[0].startswith("tfidf_") and abs(f[1]) > 1e-10]
     if tfidf_features:
         important_words = [f[0][6:] for f in tfidf_features[:3]]
         explanation_parts.append(f"Wichtige Wörter: {', '.join(important_words)}")
