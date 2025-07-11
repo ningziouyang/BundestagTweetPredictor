@@ -2,86 +2,45 @@ import streamlit as st
 import joblib
 import numpy as np
 import re
-# import torch # Nicht mehr benötigt, da BERT-Code entfernt wurde
-# from transformers import AutoTokenizer, AutoModel # Nicht mehr benötigt, da BERT-Code entfernt wurde
-import os # Sicherstellen, dass das os-Modul importiert ist
+import torch
+from transformers import AutoTokenizer, AutoModel
 
-# ==== Modellkonfiguration: Jetzt nur noch die Dateien, die Sie tatsächlich behalten haben ====
-# app.py befindet sich im Verzeichnis streamlit_app/
-# Die Modelldateien befinden sich im Verzeichnis streamlit_app/models/
-# Daher ist BASE_DIR das Verzeichnis, in dem sich app.py befindet, und die Modelle sind unter BASE_DIR/models/
-BASE_DIR = os.path.dirname(__file__)
-
+# ==== 模型配置 ====
 MODEL_OPTIONS = {
-    # Option 1: Baseline TF-IDF Modell (angenommen unter Verwendung von lr_model_no_urls und tfidf_no_urls)
-    "TF-IDF baseline (no_urls)": {
-        "model": os.path.join(BASE_DIR, "models", "lr_model_no_urls.joblib"),
-        "vectorizer": os.path.join(BASE_DIR, "models", "tfidf_no_urls.joblib"), # Angenommen, dies ist der Vektorisierer für Ihre TF-IDF Baseline
+    "TF-IDF baseline": {
+        "model": "models/lr_model_no_urls.joblib",
+        "vectorizer": "models/tfidf_no_urls.joblib",
         "scaler": None
     },
-    # Option 2: TF-IDF + zusätzliche Merkmale (angenommen unter Verwendung von lr_model_extra_no_urls und scaler_extra_no_urls)
     "TF-IDF + Extra Features": {
-        "model": os.path.join(BASE_DIR, "models", "lr_model_extra_no_urls.joblib"),
-        "vectorizer": os.path.join(BASE_DIR, "models", "tfidf_extra_no_urls.joblib"), # Angenommen, dies ist der Vektorisierer für Extra Features
-        "scaler": os.path.join(BASE_DIR, "models", "scaler_extra_no_urls.joblib")
+        "model": "models/lr_model_extra_no_urls.joblib",
+        "vectorizer": "models/tfidf_extra_no_urls.joblib",
+        "scaler": "models/scaler_extra_no_urls.joblib"
     },
-    # Option 3: Kombiniertes Modell (angenommen lr_model_combined, scaler_combined)
-    "Combined Model": {
-        "model": os.path.join(BASE_DIR, "models", "lr_model_combined.joblib"),
-        # Hier müssen Sie bestätigen, welchen Vektorisierer das kombinierte Modell verwendet.
-        # Wenn "Combined Model" TF-IDF verwendet, stellen Sie sicher, dass der Pfad korrekt ist.
-        # Wenn es nicht auf tfidf_vectorizer_bert_engineered.joblib angewiesen ist (da wir den BERT-Teil entfernt haben),
-        # ändern Sie dies bitte entsprechend. Wenn es keinen TF-IDF Vektorisierer benötigt, setzen Sie es auf None.
-        "vectorizer": os.path.join(BASE_DIR, "models", "tfidf_vectorizer_bert_engineered.joblib"),
-        "scaler": os.path.join(BASE_DIR, "models", "scaler_combined.joblib")
+    "TF-IDF + BERT + Engineered": {
+        "model": "models/lr_tfidf_bert_engineered.joblib",
+        "vectorizer": "models/tfidf_vectorizer_bert_engineered.joblib",
+        "scaler": "models/feature_scaler_bert_engineered.joblib"
     }
 }
 
-st.title("Parteivorhersage für Bundestags-Tweets 🇩🇪")
+st.title("🇩🇪 Bundestags-Tweet Parteivorhersage")
 
-choice = st.selectbox("📦 Wähle ein Modell:", list(MODEL_OPTIONS.keys()))
+# ==== 选择模型 ====
+choice = st.selectbox("🔍 Wähle ein Modell:", list(MODEL_OPTIONS.keys()))
 info = MODEL_OPTIONS[choice]
+model = joblib.load(info["model"])
+vectorizer = joblib.load(info["vectorizer"])
+scaler = joblib.load(info["scaler"]) if info["scaler"] else None
+use_bert = "BERT" in choice
 
-# **Wichtig: Fügen Sie vor dem Laden der Dateien eine Dateiexistenzprüfung hinzu**
-try:
-    # Überprüfen und Laden der Modelldatei
-    model_path = info["model"]
-    if not os.path.exists(model_path):
-        st.error(f"❌ Fehler: Modelldatei '{os.path.basename(model_path)}' existiert nicht in '{os.path.dirname(model_path)}'. Bitte überprüfen Sie, ob die Datei hochgeladen wurde.")
-        st.stop()
-    model = joblib.load(model_path)
+# ==== BERT vorbereiten ====
+if use_bert:
+    tokenizer = AutoTokenizer.from_pretrained("bert-base-german-cased")
+    bert_model = AutoModel.from_pretrained("bert-base-german-cased")
+    bert_model.eval()
 
-    # Überprüfen und Laden der Vektorisiererdatei
-    vectorizer_path = info["vectorizer"]
-    if not os.path.exists(vectorizer_path):
-        st.error(f"❌ Fehler: Vektorisiererdatei '{os.path.basename(vectorizer_path)}' existiert nicht in '{os.path.dirname(vectorizer_path)}'. Bitte überprüfen Sie, ob die Datei hochgeladen wurde.")
-        st.stop()
-    vectorizer = joblib.load(vectorizer_path)
-
-    # Überprüfen und Laden der Skaliererdatei
-    scaler = None
-    if info["scaler"]:
-        scaler_path = info["scaler"]
-        if not os.path.exists(scaler_path):
-            st.error(f"❌ Fehler: Skaliererdatei '{os.path.basename(scaler_path)}' existiert nicht in '{os.path.dirname(scaler_path)}'. Bitte überprüfen Sie, ob die Datei hochgeladen wurde.")
-            st.stop()
-        scaler = joblib.load(scaler_path)
-
-except FileNotFoundError as e:
-    st.error(f"❌ Fehler: Modelldatei konnte nicht gefunden werden. Bitte überprüfen Sie den Dateipfad und ob die Modelldateien hochgeladen wurden.")
-    st.error(f"Detaillierter Fehler: {e}")
-    st.stop() # Beendet die Anwendungsausführung, um weitere Fehler zu vermeiden
-except Exception as e: # Fängt andere mögliche Ladefehler ab, z.B. wenn die Datei beschädigt ist und joblib sie nicht parsen kann
-    st.error(f"❌ Fehler: Beim Laden der Modelldatei ist ein Fehler aufgetreten. Die Datei könnte beschädigt oder unvollständig sein.")
-    st.error(f"Detaillierter Fehler: {e}")
-    st.stop()
-
-
-# 'use_bert' Variable und der zugehörige BERT-Ladeblock werden entfernt,
-# da das 'TF-IDF + BERT + Engineered' Modell entfernt wurde.
-
-
-# ==== Feature Engineering (Hilfsfunktionen für Feature Engineering) ====
+# ==== Feature Engineering ====
 POLITICAL_TERMS = [
     "klimaschutz", "freiheit", "bürgergeld", "migration", "rente", "gerechtigkeit",
     "steuern", "digitalisierung", "gesundheit", "bildung", "europa", "verteidigung",
@@ -90,115 +49,77 @@ POLITICAL_TERMS = [
 
 def count_emojis(text):
     try:
-        # Versucht, die emoji-Bibliothek zu importieren; falls nicht installiert, greift es auf eine einfache Zählung zurück
         import emoji
-        # Stellt sicher, dass der Text vom Typ String ist, um Fehler bei nicht-String-Eingaben zu vermeiden
         return sum(1 for char in str(text) if char in emoji.EMOJI_DATA)
-    except ImportError:
-        # Wenn die emoji-Bibliothek nicht installiert ist, wird eine einfache Alternative verwendet
+    except:
         return str(text).count(":")
-    except TypeError: # Behandelt den Fall, dass der Text None oder ein anderer nicht iterierbarer Typ ist
-        return 0
 
 def extract_features(text):
-    # Stellt sicher, dass der Text ein String ist, um Fehler im re-Modul zu vermeiden
-    text_str = str(text)
-    # Vermeidet Division durch Null
-    words = re.findall(r"\w+", text_str)
-    avg_word_len = sum(len(w) for w in words) / len(words) if words else 0
-    uppercase_rat = sum(1 for c in text_str if c.isupper()) / len(text_str) if text_str else 0
-
     feats = [
-        len(text_str),
-        len(words),
-        avg_word_len,
-        uppercase_rat,
-        text_str.count("!"),
-        text_str.count("?"),
-        len(re.findall(r"[!?]{2,}", text_str)),
-        sum(1 for w in POLITICAL_TERMS if w in text_str.lower()),
-        count_emojis(text_str),
-        len(re.findall(r"#\w+", text_str)),
-        len(re.findall(r"@\w+", text_str)),
-        len(re.findall(r"http\S+|www\S+|https\S+", text_str)),
-        len(re.findall(r"\.\.+", text_str)),
-        int(text_str.strip().lower().startswith("rt @")),
+        len(str(text)),
+        len(str(text).split()),
+        avg_word_length(text),
+        uppercase_ratio(text),
+        str(text).count("!"),
+        str(text).count("?"),
+        multi_punct_count(text),
+        count_political_terms(text),
+        count_emojis(text),
+        count_hashtags(text),
+        count_mentions(text),
+        count_urls(text),
+        count_dots(text),
+        is_retweet(text),
     ]
     return np.array(feats).reshape(1, -1)
 
-# Bert Embedding Funktion ist nicht mehr erforderlich und wurde entfernt
-# def embed_single_text(text):
-#     with torch.no_grad():
-#         encoded = tokenizer(text, truncation=True, padding="max_length", max_length=64, return_tensors="pt")
-#         output = bert_model(**encoded)
-#         return output.last_hidden_state[:, 0, :].squeeze().cpu().numpy().reshape(1, -1)
+def avg_word_length(text):
+    words = re.findall(r"\w+", str(text))
+    return sum(len(w) for w in words) / len(words) if words else 0
 
+def uppercase_ratio(text):
+    text = str(text)
+    return sum(1 for c in text if c.isupper()) / len(text) if text else 0
 
-# ==== UI-Eingabe und Vorhersagelogik ====
-st.markdown("✏️ **Gib einen Bundestags-Tweet ein:**")
-tweet = st.text_area("", placeholder="Wir fordern mehr Klimaschutz und soziale Gerechtigkeit für alle...")
+def multi_punct_count(text): return len(re.findall(r"[!?]{2,}", str(text)))
+def count_political_terms(text): return sum(1 for w in POLITICAL_TERMS if w in str(text).lower())
+def count_hashtags(text): return len(re.findall(r"#\w+", str(text)))
+def count_mentions(text): return len(re.findall(r"@\w+", str(text)))
+def count_urls(text): return len(re.findall(r"http\S+|www\S+|https\S+", str(text)))
+def count_dots(text): return len(re.findall(r"\.\.+", str(text)))
+def is_retweet(text): return int(str(text).strip().lower().startswith("rt @"))
+
+def embed_single_text(text):
+    with torch.no_grad():
+        encoded = tokenizer(text, truncation=True, padding="max_length", max_length=64, return_tensors="pt")
+        output = bert_model(**encoded)
+        return output.last_hidden_state[:, 0, :].squeeze().cpu().numpy().reshape(1, -1)
+
+# ==== UI ====
+tweet = st.text_area("📝 Gib einen Bundestags-Tweet ein:", height=100)
 
 if tweet and st.button("🔮 Vorhersagen"):
-    # Sicherstellen, dass X_tfidf ein Array ist oder in ein Array umgewandelt werden kann, um mit np.hstack kompatibel zu sein
-    X_tfidf = vectorizer.transform([tweet]).toarray() # Konvertiert in ein dichtes Array
-    
-    X_eng_scaled = None
-    if scaler: # Nur wenn der Skalierer vorhanden ist, Merkmalsextraktion und Skalierung durchführen
-        try:
-            X_eng = extract_features(tweet)
-            X_eng_scaled = scaler.transform(X_eng)
-        except Exception as e:
-            st.error(f"❌ Feature Engineering oder Skalierung fehlgeschlagen: {e}")
-            st.stop()
+    X_tfidf = vectorizer.transform([tweet])
+    if scaler:
+        X_eng = extract_features(tweet)
+        X_eng_scaled = scaler.transform(X_eng)
+    if use_bert:
+        X_bert = embed_single_text(tweet)
 
-    # X_bert ist nicht mehr relevant, da BERT-Modelle entfernt wurden
-    # X_bert = None
-    # if use_bert and 'bert_model' in locals():
-    #     try:
-    #         X_bert = embed_single_text(tweet)
-    #     except Exception as e:
-    #         st.error(f"❌ BERT Embedding fehlgeschlagen: {e}")
-    #         st.stop()
+    if use_bert:
+        X_all = np.hstack([X_tfidf.toarray(), X_bert, X_eng_scaled])
+    elif scaler:
+        X_all = np.hstack([X_tfidf.toarray(), X_eng_scaled])
+    else:
+        X_all = X_tfidf
 
-    # === Merkmals-Kombination ===
-    # Kombiniert die Eingabedaten für das Modell basierend auf dem ausgewählten Modell und den Merkmalen
-    final_features = []
-    final_features.append(X_tfidf)
+    pred = model.predict(X_all)[0]
+    st.success(f"🗳️ Vorhergesagte Partei: **{pred}**")
 
-    # Der BERT-Teil wird hier entfernt
-    # if X_bert is not None:
-    #     final_features.append(X_bert)
-    
-    if X_eng_scaled is not None:
-        final_features.append(X_eng_scaled)
-    
-    # Verwendet np.hstack, um alle Merkmals-Arrays zu kombinieren
-    try:
-        X_all = np.hstack(final_features)
-    except ValueError as e:
-        st.error(f"❌ Fehler beim Zusammenführen von Merkmalen. Bitte stellen Sie sicher, dass alle Merkmals-Arrays dimensionkompatibel sind: {e}")
-        st.error(f"TF-IDF Shape: {X_tfidf.shape if 'X_tfidf' in locals() else 'N/A'}")
-        # Der BERT-Shape-Fehler wird hier entfernt
-        # st.error(f"BERT Shape: {X_bert.shape if 'X_bert' in locals() else 'N/A'}")
-        st.error(f"Engineered Scaled Shape: {X_eng_scaled.shape if 'X_eng_scaled' in locals() else 'N/A'}")
-        st.stop()
-
-
-    # Vorhersage durchführen
-    try:
-        pred = model.predict(X_all)[0]
-        st.success(f"🗳️ **Vorhergesagte Partei:** {pred}")
-
-        if hasattr(model, "predict_proba"):
-            probs = model.predict_proba(X_all)[0]
-            st.subheader("📊 Wahrscheinlichkeit je Partei")
-            # Verwenden Sie eine List-Comprehension, um sicherzustellen, dass Schlüssel und Werte native Python-Typen für die Streamlit-Plotting sind
-            st.bar_chart({p: float(prob) for p, prob in zip(model.classes_, probs)})
-    except Exception as e:
-        st.error(f"❌ Fehler bei der Vorhersage: {e}")
-        st.warning("Bitte stellen Sie sicher, dass alle Modelle und Skalierer-Dateien korrekt geladen und nicht leer sind und dass die Eingangsmerkmale die gleiche Dimension wie beim Modelltraining haben.")
-
+    if hasattr(model, "predict_proba"):
+        probs = model.predict_proba(X_all)[0]
+        st.subheader("📊 Wahrscheinlichkeit je Partei")
+        st.bar_chart({p: float(prob) for p, prob in zip(model.classes_, probs)})
 
 st.markdown("---")
-# Die Beschreibung wurde angepasst, da BERT-Embeddings nicht mehr verwendet werden
-st.markdown("🔍 Dieses Tool kombiniert klassische Textmerkmale (TF-IDF) und engineered Features zur Klassifikation von Bundestags-Tweets nach Partei.")
+st.markdown("Dieses Tool wurde im Rahmen eines ML4B-Projekts entwickelt. Es verwendet klassische Textklassifikation (TF-IDF), BERT Embeddings und linguistische Merkmale zur Parteivorhersage deutscher Bundestags-Tweets.")
