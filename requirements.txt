@@ -9,3 +9,4 @@ emoji
 shap
 matplotlib
 seaborn
+xgboost
