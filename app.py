@@ -128,16 +128,32 @@ PARTY_COLORS = {
 
 # ==== Layout-Konfiguration ====
 st.set_page_config(page_title="Parteivorhersage", layout="wide")
+
+# Korrektur für den oberen Leerraum:
+# Überprüfe, ob hier leere st.write(), st.markdown("") oder ähnliches eingefügt wurde.
+# Wenn ja, entferne sie. Standardmäßig hat Streamlit einen kleinen oberen Abstand.
+# Manchmal hilft es, CSS für das main-Container anzupassen, aber das ist selten nötig.
+# Beispiel für potenziellen Fehler, der hier entfernt werden sollte:
+# st.write("")
+
 st.markdown("""
     <style>
+    /* CSS, um den Button neben dem Textbereich auszublenden */
     textarea + div[role='button'] {
         display: none !important;
     }
+    /* Schriftgröße des Textbereichs anpassen */
     .element-container textarea {
         font-size: 16px !important;
     }
+    /* Label des Textbereichs ausblenden */
     div[data-testid=stTextArea] label {
         display: none;
+    }
+    /* Um den vom Streamlit erzeugten oberen Leerraum zu reduzieren */
+    /* Sei vorsichtig mit globalen CSS-Änderungen, sie können andere Elemente beeinflussen */
+    .css-18e3th9 { /* Dies ist der Selektor für den main-Container in Streamlit */
+        padding-top: 1rem; /* Reduziert den oberen Abstand. Standard ist oft 3rem oder mehr */
     }
     </style>
 """, unsafe_allow_html=True)
@@ -158,19 +174,29 @@ with st.expander(f"✨ **{choice} - Modellmerkmale**"):
     st.markdown(info["description"])
 
 # Laden der Modelle und Komponenten
-model = joblib.load(info["model"])
-vectorizer = joblib.load(info["vectorizer"])
-scaler = joblib.load(info["scaler"]) if info["scaler"] else None
-use_bert = "BERT" in choice
+# Es ist wichtig, dass die Pfade zu deinen Modellen korrekt sind,
+# z.B. models/lr_model_no_urls.joblib
+try:
+    model = joblib.load(info["model"])
+    vectorizer = joblib.load(info["vectorizer"])
+    scaler = joblib.load(info["scaler"]) if info["scaler"] else None
+    use_bert = "BERT" in choice
+except FileNotFoundError as e:
+    st.error(f"Fehler beim Laden der Modelldatei: {e}. Bitte stellen Sie sicher, dass die Dateien im 'models/' Ordner vorhanden sind.")
+    st.stop() # Stoppt die Ausführung der App, wenn Modelle nicht gefunden werden
 
 if use_bert:
     # BERT-Modell und Tokenizer nur bei Bedarf laden und cachen
     @st.cache_resource
     def load_bert_model():
-        tokenizer = AutoTokenizer.from_pretrained("bert-base-german-cased")
-        bert_model = AutoModel.from_pretrained("bert-base-german-cased")
-        bert_model.eval() # Setzt das Modell in den Evaluationsmodus
-        return tokenizer, bert_model
+        try:
+            tokenizer = AutoTokenizer.from_pretrained("bert-base-german-cased")
+            bert_model = AutoModel.from_pretrained("bert-base-german-cased")
+            bert_model.eval() # Setzt das Modell in den Evaluationsmodus
+            return tokenizer, bert_model
+        except Exception as e:
+            st.error(f"Fehler beim Laden des BERT-Modells: {e}. Stellen Sie sicher, dass Sie eine Internetverbindung haben oder das Modell lokal verfügbar ist.")
+            st.stop() # Stoppt die App, wenn BERT nicht geladen werden kann
     tokenizer, bert_model = load_bert_model()
 
 # ==== Feature-Extraktion ====
@@ -185,8 +211,8 @@ POLITICAL_TERMS = [
 def count_emojis(text): return str(text).count("😀")
 def avg_word_length(text):
     words = re.findall(r"\w+", str(text))
-    return sum(len(w) for w in words) / len(words) if words else 0
-def uppercase_ratio(text): return sum(1 for c in text if c.isupper()) / len(text) if text else 0
+    return sum(len(w) for w in words) / len(words) if words else 0 if len(words) > 0 else 0 # Defensive Programmierung
+def uppercase_ratio(text): return sum(1 for c in text if c.isupper()) / len(text) if len(text) > 0 else 0
 def multi_punct_count(text): return len(re.findall(r"[!?]{2,}", str(text)))
 def count_political_terms(text): return sum(1 for w in POLITICAL_TERMS if w in str(text).lower())
 def count_hashtags(text): return len(re.findall(r"#\w+", str(text)))
@@ -293,7 +319,7 @@ if predict_clicked and st.session_state["input_tweet"].strip(): # Nutzt den Twee
 
         st.subheader("📊 Vorhersagewahrscheinlichkeit (Top 3)")
 
-        # Die Top 3 Parteien anzeigen
+        # Die Top 3 Parteien anzeigen und formatieren
         top_3_parties = df.head(3)
         for index, row in top_3_parties.iterrows():
             st.markdown(
