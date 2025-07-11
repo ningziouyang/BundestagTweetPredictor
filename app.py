@@ -4,8 +4,9 @@ import numpy as np
 import re
 import torch
 from transformers import AutoTokenizer, AutoModel
+import pandas as pd
 
-# ==== 模型配置 ====
+# ==== Modelloptionen ====
 MODEL_OPTIONS = {
     "TF-IDF baseline": {
         "model": "models/lr_model_no_urls.joblib",
@@ -24,9 +25,40 @@ MODEL_OPTIONS = {
     }
 }
 
-st.set_page_config(page_title="Parteivorhersage", layout="centered")
+# ==== Partei-Infos & Farben ====
+PARTY_INFOS = {
+    "AfD": "Alternative für Deutschland: Kritisch gegenüber Migration und EU, betont nationale Interessen und innere Sicherheit.",
+    "Bündnis 90/Die Grünen": "Fokus auf Klimaschutz, Nachhaltigkeit, soziale Gerechtigkeit und pro-europäische Zusammenarbeit.",
+    "CDU": "Christlich Demokratische Union: Mitte-rechts, wirtschaftsliberal, konservativ in Gesellschaftsfragen.",
+    "CSU": "Christlich-Soziale Union: Bayerische Schwesterpartei der CDU, konservativ, betont regionale Identität.",
+    "SPD": "Sozialdemokratische Partei Deutschlands: Mitte-links, soziale Gerechtigkeit, Arbeitnehmerrechte, Bildung, Klima.",
+    "FDP": "Freie Demokratische Partei: Wirtschaftsliberal, betont individuelle Freiheit, Digitalisierung, Bildung.",
+    "Die Linke": "Sozialistisch, betont soziale Gerechtigkeit, Friedenspolitik, starke Regulierung von Wirtschaft.",
+    "Fraktionslos": "Keiner Fraktion zugeordnet – meist Einzelabgeordnete oder kleine Gruppen ohne klare Parteizugehörigkeit."
+}
 
+PARTY_COLORS = {
+    "AfD": "#009ee0",
+    "Bündnis 90/Die Grünen": "#64a12d",
+    "CDU": "#000000",
+    "CSU": "#0c3c85",
+    "SPD": "#e3000f",
+    "FDP": "#ffed00",
+    "Die Linke": "#be3075",
+    "Fraktionslos": "#999999"
+}
+
+# ==== Layout ====
+st.set_page_config(page_title="Parteivorhersage", layout="wide")
 st.title("🗳️ Parteivorhersage für Bundestags-Tweets")
+
+# ==== Seitenleiste: Parteiinformationen ====
+st.sidebar.header("ℹ️ Parteiinformationen")
+for partei, info in PARTY_INFOS.items():
+    with st.sidebar.expander(partei):
+        st.write(info)
+
+# ==== Modellauswahl & Laden ====
 choice = st.selectbox("🔍 Wähle ein Modell:", list(MODEL_OPTIONS.keys()))
 info = MODEL_OPTIONS[choice]
 
@@ -35,28 +67,24 @@ vectorizer = joblib.load(info["vectorizer"])
 scaler = joblib.load(info["scaler"]) if info["scaler"] else None
 use_bert = "BERT" in choice
 
-# ==== BERT vorbereiten ====
+# ==== BERT laden ====
 if use_bert:
     tokenizer = AutoTokenizer.from_pretrained("bert-base-german-cased")
     bert_model = AutoModel.from_pretrained("bert-base-german-cased")
     bert_model.eval()
 
-# ==== Text Feature Funktionen ====
+# ==== Feature-Extraktion ====
 POLITICAL_TERMS = [
     "klimaschutz", "freiheit", "bürgergeld", "migration", "rente", "gerechtigkeit",
     "steuern", "digitalisierung", "gesundheit", "bildung", "europa", "verteidigung",
     "arbeitsmarkt", "soziales", "integration", "umweltschutz", "innenpolitik"
 ]
 
-def count_emojis(text): return str(text).count("😀")  # placeholder
+def count_emojis(text): return str(text).count("😀")
 def avg_word_length(text):
     words = re.findall(r"\w+", str(text))
     return sum(len(w) for w in words) / len(words) if words else 0
-
-def uppercase_ratio(text):
-    text = str(text)
-    return sum(1 for c in text if c.isupper()) / len(text) if text else 0
-
+def uppercase_ratio(text): return sum(1 for c in text if c.isupper()) / len(text) if text else 0
 def multi_punct_count(text): return len(re.findall(r"[!?]{2,}", str(text)))
 def count_political_terms(text): return sum(1 for w in POLITICAL_TERMS if w in str(text).lower())
 def count_hashtags(text): return len(re.findall(r"#\w+", str(text)))
@@ -105,10 +133,7 @@ if tweet and st.button("🔮 Vorhersagen"):
 
     X_eng_scaled = None
     if scaler:
-        if "Extra Features" in choice:
-            X_eng = extract_extra_features(tweet)
-        else:
-            X_eng = extract_features(tweet)
+        X_eng = extract_extra_features(tweet) if "Extra Features" in choice else extract_features(tweet)
         X_eng_scaled = scaler.transform(X_eng)
 
     if use_bert:
@@ -120,12 +145,23 @@ if tweet and st.button("🔮 Vorhersagen"):
         X_all = X_tfidf
 
     pred = model.predict(X_all)[0]
-    st.success(f"🗳️ Vorhergesagte Partei: **{pred}**")
+    st.success(f"🟩 Vorhergesagte Partei: **{pred}**")
 
+    # Partei-Info
+    with st.expander(f"🧭 Informationen über {pred}"):
+        st.write(PARTY_INFOS.get(pred, "Keine Informationen verfügbar."))
+
+    # Wahrscheinlichkeit visualisieren
     if hasattr(model, "predict_proba"):
         probs = model.predict_proba(X_all)[0]
+        df = pd.DataFrame({
+            "Partei": model.classes_,
+            "Wahrscheinlichkeit": probs,
+            "Farbe": [PARTY_COLORS.get(p, "#aaaaaa") for p in model.classes_]
+        })
+
         st.subheader("📊 Vorhersagewahrscheinlichkeit")
-        st.bar_chart({p: float(prob) for p, prob in zip(model.classes_, probs)})
+        st.bar_chart(data=df.set_index("Partei")["Wahrscheinlichkeit"])
 
 st.markdown("---")
 st.caption("📌 Dieses Tool wurde im Rahmen des ML4B-Projekts entwickelt – zur Parteivorhersage deutscher Bundestags-Tweets.")
