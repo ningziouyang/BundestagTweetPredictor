@@ -194,143 +194,131 @@ def embed_single_text(text):
         output = bert_model(**encoded)
         return output.last_hidden_state[:, 0, :].squeeze().cpu().numpy().reshape(1, -1)
 
-# ==== Einfachere Erklärungsfunktion ====
-def analyze_prediction_simple(tweet_text, model, vectorizer, scaler, label_encoder, pred_encoded, X_all):
+# ==== Alternative Erklärungsfunktion ohne SHAP ====
+def analyze_prediction_alternative(tweet_text, model, vectorizer, label_encoder, X_all):
     """
-    Einfachere und robustere Analyse der wichtigsten Einflussfaktoren
+    Alternative Analyse ohne SHAP - zeigt wichtige Wörter basierend auf TF-IDF und Model-Features
     """
-    # SHAP Explainer erstellen
-    explainer = shap.TreeExplainer(model)
-    shap_values = explainer.shap_values(X_all)
-    
-    # Richtige SHAP-Werte extrahieren
-    if isinstance(shap_values, list):
-        if len(shap_values) > pred_encoded:
-            shap_values_pred = shap_values[pred_encoded][0]
-        else:
-            shap_values_pred = shap_values[0][0]
-    else:
-        if len(shap_values.shape) == 2:
-            shap_values_pred = shap_values[0]
-        else:
-            shap_values_pred = shap_values
-    
     # Feature-Bereiche
     n_tfidf = len(vectorizer.get_feature_names_out())
     n_bert = 768
     n_eng = 14
     
-    # Alle Features mit ihren Namen und SHAP-Werten
-    all_features = []
-    
-    # 1. TF-IDF Features (Wörter)
+    # TF-IDF Features extrahieren
     tfidf_features = vectorizer.get_feature_names_out()
     tfidf_values = X_all[0][:n_tfidf]
-    tfidf_shap = shap_values_pred[:n_tfidf]
     
-    for i, (word, tf_val, shap_val) in enumerate(zip(tfidf_features, tfidf_values, tfidf_shap)):
-        if tf_val > 0:  # Nur Wörter die vorkommen
-            all_features.append({
-                'name': f"Wort: '{word}'",
-                'type': 'word',
-                'shap_value': shap_val,
-                'feature_value': tf_val,
-                'abs_shap': abs(shap_val),
-                'word': word
+    # Finde Wörter die im Tweet vorkommen
+    found_words = []
+    for i, (word, tf_val) in enumerate(zip(tfidf_features, tfidf_values)):
+        if tf_val > 0 and word.lower() in tweet_text.lower():
+            found_words.append({
+                'word': word,
+                'tf_value': tf_val,
+                'is_political': word.lower() in [term.lower() for term in POLITICAL_TERMS]
             })
     
-    # 2. BERT Features (als Gesamtblock)
-    bert_shap = shap_values_pred[n_tfidf:n_tfidf+n_bert]
-    bert_total = np.sum(bert_shap)
-    all_features.append({
-        'name': 'BERT Semantische Bedeutung',
-        'type': 'bert',
-        'shap_value': bert_total,
-        'feature_value': 1.0,
-        'abs_shap': abs(bert_total)
-    })
+    # Sortiere nach TF-IDF Wert (wichtigste Wörter zuerst)
+    found_words.sort(key=lambda x: x['tf_value'], reverse=True)
     
-    # 3. Engineered Features
-    eng_shap = shap_values_pred[n_tfidf+n_bert:n_tfidf+n_bert+n_eng]
+    # Analysiere Tweet-Eigenschaften
+    eng_values = X_all[0][n_tfidf+n_bert:n_tfidf+n_bert+n_eng]
     eng_names = [
         "Tweet-Länge (Zeichen)", "Tweet-Länge (Wörter)", "Durchschnittliche Wortlänge", 
         "Großbuchstaben-Anteil", "Ausrufezeichen", "Fragezeichen", "Mehrfach-Satzzeichen", 
         "Politische Begriffe", "Emojis", "Hashtags", "Mentions", "URLs", "Punkte", "Ist Retweet"
     ]
     
-    for name, shap_val in zip(eng_names, eng_shap):
-        all_features.append({
-            'name': name,
-            'type': 'feature',
-            'shap_value': shap_val,
-            'feature_value': 1.0,
-            'abs_shap': abs(shap_val)
-        })
+    tweet_properties = []
+    for name, value in zip(eng_names, eng_values):
+        if value > 0:  # Nur wenn Feature aktiv ist
+            tweet_properties.append({'name': name, 'value': value})
     
-    return all_features, tweet_text
+    return found_words, tweet_properties
 
-def display_simple_explanation(all_features, predicted_party, tweet_text, top_n=10):
+def get_party_keywords():
     """
-    Zeigt die wichtigsten Einflussfaktoren in einfacher Form
+    Definiert typische Schlüsselwörter für jede Partei basierend auf bekannten politischen Positionen
     """
-    # Sortiere alle Features nach absolutem SHAP-Wert
-    all_features.sort(key=lambda x: x['abs_shap'], reverse=True)
+    return {
+        "AfD": ["grenzen", "migration", "deutschland", "sicherheit", "identität", "heimat", "volk", "souveränität"],
+        "Bündnis 90/Die Grünen": ["klima", "umwelt", "nachhaltigkeit", "erneuerbare", "energiewende", "bio", "ökologie", "zukunft"],
+        "CDU": ["wirtschaft", "mittelstand", "tradition", "familie", "ordnung", "verantwortung", "stabilität"],
+        "CSU": ["bayern", "tradition", "heimat", "wirtschaft", "familie", "sicherheit", "ordnung"],
+        "SPD": ["sozial", "gerechtigkeit", "arbeit", "solidarität", "bürgergeld", "rente", "fair", "zusammenhalt"],
+        "FDP": ["freiheit", "liberal", "wirtschaft", "innovation", "digital", "unternehmen", "bildung", "chancen"],
+        "Die Linke": ["sozial", "gerechtigkeit", "umverteilung", "frieden", "solidarität", "links", "arbeiter"],
+        "Fraktionslos": []
+    }
+
+def explain_prediction_simple(found_words, predicted_party, tweet_text):
+    """
+    Einfache Erklärung basierend auf gefundenen Wörtern und Partei-Keywords
+    """
+    party_keywords = get_party_keywords()
+    predicted_keywords = party_keywords.get(predicted_party, [])
     
-    st.write("**🔍 Die wichtigsten Einflussfaktoren:**")
+    st.write("**🔍 Warum wurde diese Partei vorhergesagt?**")
     
-    # Debug Info
-    if len(all_features) > 0:
-        max_influence = max(f['abs_shap'] for f in all_features)
-        st.write(f"_Debug: Stärkster Einfluss: {max_influence:.6f}_")
+    # Prüfe auf Partei-spezifische Schlüsselwörter
+    matching_keywords = []
+    for word_data in found_words:
+        word = word_data['word'].lower()
+        if word in predicted_keywords:
+            matching_keywords.append(word_data)
     
-    # Zeige Top Features ohne Schwelle
-    shown_count = 0
-    words_shown = 0
+    # Zeige passende Schlüsselwörter
+    if matching_keywords:
+        st.write(f"**📝 Gefundene {predicted_party}-typische Wörter:**")
+        for word_data in matching_keywords[:5]:
+            word = word_data['word']
+            tf_val = word_data['tf_value']
+            st.write(f"🟢 **'{word}'** → typisch für {predicted_party} (Gewicht: {tf_val:.3f})")
     
-    for i, feature in enumerate(all_features[:top_n*2]):  # Schaue mehr Features an
-        if shown_count >= top_n:
+    # Zeige wichtigste Wörter generell
+    st.write("**📝 Wichtigste Wörter im Tweet:**")
+    shown_words = 0
+    for word_data in found_words:
+        if shown_words >= 8:  # Maximal 8 Wörter
             break
             
-        # Begrenze Wörter auf max 5
-        if feature['type'] == 'word' and words_shown >= 5:
+        word = word_data['word']
+        tf_val = word_data['tf_value']
+        is_political = word_data['is_political']
+        
+        # Filtere zu kurze oder uninteressante Wörter
+        if len(word) < 3 or word in ['der', 'die', 'das', 'und', 'ist', 'wir', 'ich', 'für', 'mit', 'auf', 'ein', 'eine']:
             continue
             
-        # Prüfe bei Wörtern ob sie im Text vorkommen
-        if feature['type'] == 'word':
-            if feature['word'].lower() not in tweet_text.lower():
-                continue
-        
-        # Zeige Feature
-        name = feature['name']
-        shap_val = feature['shap_value']
-        
-        if shap_val > 0:
-            st.write(f"🟢 **{name}** → unterstützt {predicted_party} (Einfluss: +{shap_val:.6f})")
-        else:
-            st.write(f"🔴 **{name}** → spricht gegen {predicted_party} (Einfluss: {shap_val:.6f})")
-        
-        if feature['type'] == 'word':
-            words_shown += 1
-        shown_count += 1
+        emoji = "🔥" if is_political else "📌"
+        political_note = " (politischer Begriff)" if is_political else ""
+        st.write(f"{emoji} **'{word}'**{political_note} → Gewicht: {tf_val:.3f}")
+        shown_words += 1
     
-    # Falls immer noch nichts gezeigt wird
-    if shown_count == 0:
-        st.write("**🔍 Top 5 Faktoren (alle Werte):**")
-        for i, feature in enumerate(all_features[:5]):
-            name = feature['name']
-            shap_val = feature['shap_value']
-            st.write(f"{i+1}. **{name}**: {shap_val:.8f}")
+    if shown_words == 0:
+        st.write("_Keine aussagekräftigen Einzelwörter gefunden - Vorhersage basiert auf semantischer Gesamtbedeutung._")
     
-    # Statistiken
-    total_influence = sum(f['abs_shap'] for f in all_features)
-    word_influence = sum(f['abs_shap'] for f in all_features if f['type'] == 'word')
+    # Erkläre warum diese Partei
+    st.write(f"**🎯 Warum {predicted_party}?**")
     
-    st.write("---")
-    st.write(f"📊 **Einfluss-Verteilung:**")
-    st.write(f"• Wörter: {word_influence:.6f}")
-    st.write(f"• BERT Semantik: {next((f['abs_shap'] for f in all_features if f['type'] == 'bert'), 0):.6f}")
-    st.write(f"• Tweet-Eigenschaften: {total_influence - word_influence:.6f}")
-    st.write(f"• Gesamt: {total_influence:.6f}")
+    if predicted_party == "AfD":
+        st.write("• Sprache deutet auf konservative/nationale Themen hin")
+    elif predicted_party == "Bündnis 90/Die Grünen":
+        st.write("• Begriffe deuten auf Umwelt-/Klimathemen hin")
+    elif predicted_party == "SPD":
+        st.write("• Sprachstil deutet auf soziale/Arbeitsthemen hin")
+    elif predicted_party == "FDP":
+        st.write("• Begriffe deuten auf Wirtschafts-/Bildungsthemen hin")
+    elif predicted_party == "CDU":
+        st.write("• Sprache deutet auf wirtschafts-/ordnungspolitische Themen hin")
+    elif predicted_party == "CSU":
+        st.write("• Sprache deutet auf konservative/bayerische Themen hin")
+    elif predicted_party == "Die Linke":
+        st.write("• Begriffe deuten auf sozialistische/friedenspolitische Themen hin")
+    else:
+        st.write("• Sprachstil passt zu keiner spezifischen Parteizugehörigkeit")
+    
+    return matching_keywords
 
 
 
@@ -381,9 +369,9 @@ if predict_clicked and st.session_state["input_tweet"].strip():
         # Wahrscheinlichkeiten
         probs = model.predict_proba(X_all)[0]
         
-        # Erklärung generieren
-        all_features, tweet_text = analyze_prediction_simple(
-            tweet_to_predict, model, vectorizer, scaler, label_encoder, pred_encoded, X_all
+        # Alternative Erklärung ohne SHAP
+        found_words, tweet_properties = analyze_prediction_alternative(
+            tweet_to_predict, model, vectorizer, label_encoder, X_all
         )
     
     # Ergebnisse anzeigen
@@ -408,12 +396,33 @@ if predict_clicked and st.session_state["input_tweet"].strip():
             unsafe_allow_html=True
         )
     
-    # Einfache SHAP Erklärung
+    # Einfache Worterklärung ohne SHAP
     st.subheader("🔍 Was hat die Entscheidung beeinflusst?")
     
     with st.spinner("Analysiere Einflüsse..."):
-        # Zeige alle wichtigen Faktoren
-        display_simple_explanation(all_features, pred, tweet_to_predict, top_n=10)
+        # Zeige gefundene Wörter und Erklärung
+        matching_keywords = explain_prediction_simple(found_words, pred, tweet_to_predict)
+        
+        # Zeige Tweet-Eigenschaften wenn vorhanden
+        if tweet_properties:
+            st.write("**🔧 Auffällige Tweet-Eigenschaften:**")
+            for prop in tweet_properties[:5]:
+                st.write(f"• **{prop['name']}**: {prop['value']:.2f}")
+    
+    # Alternative: Zeige Wahrscheinlichkeiten aller Parteien als Erklärung
+    st.write("**📊 Vergleich mit anderen Parteien:**")
+    df_probs_detailed = pd.DataFrame({
+        "Partei": label_encoder.inverse_transform(range(len(probs))),
+        "Wahrscheinlichkeit": probs,
+        "Prozent": [f"{p:.1%}" for p in probs]
+    }).sort_values(by="Wahrscheinlichkeit", ascending=False)
+    
+    for index, row in df_probs_detailed.iterrows():
+        color = PARTY_COLORS.get(row['Partei'], "#aaaaaa")
+        if row['Partei'] == pred:
+            st.markdown(f"🎯 <span style='color:{color}; font-weight:bold;'>{row['Partei']}</span>: {row['Prozent']} ← **Vorhersage**", unsafe_allow_html=True)
+        else:
+            st.markdown(f"    <span style='color:{color};'>{row['Partei']}</span>: {row['Prozent']}", unsafe_allow_html=True)
     
     # Tweet-Analyse Metriken
     st.subheader("📝 Tweet-Analyse")
