@@ -321,49 +321,19 @@ if predict_clicked and st.session_state["input_tweet"].strip():
     st.subheader("🔍 Modell-Erklärung")
     
     with st.spinner("Generiere Erklärung..."):
-        # SHAP Werte berechnen
-        shap_values = explainer.shap_values(X_all)
-       
-        # Prüfe die Struktur der SHAP Werte
-        if isinstance(shap_values, list):
-            # Multi-class Fall – nehme die Werte für die vorhergesagte Klasse
-            if len(shap_values) > pred_encoded:
-                shap_values_for_prediction = shap_values[pred_encoded][0]
-            else:
-                # Fallback: nehme die erste Klasse
-                shap_values_for_prediction = shap_values[0][0]
-        else:
-            # Binary Fall oder anderes Format
-            if len(shap_values.shape) == 2:
-                shap_values_for_prediction = shap_values[0]
-            else:
-                shap_values_for_prediction = shap_values
+        @st.cache_resource
+        def prepare_shap_explainer_tfidf():
+            explainer = shap.Explainer(model, vectorizer.transform)
+            return explainer
+        
+        explainer = prepare_shap_explainer_tfidf()
+        shap_values = explainer([tweet_to_predict])
 
-        # Top positive und negative Features identifizieren
-        feature_importance = list(zip(feature_names, shap_values_for_prediction, X_all[0]))
-        feature_importance.sort(key=lambda x: abs(x[1]), reverse=True)
-        
-        # Top 10 wichtigste Features
-        top_features = feature_importance[:10]
-        
-        st.write(f"**Die wichtigsten Faktoren für die Vorhersage '{pred}':**")
-        
-        for i, (feature_name, shap_val, feature_val) in enumerate(top_features, 1):
-            if not isinstance(shap_val, (int, float)):
-                shap_val = 0
-            impact = "🟢 Positiv" if shap_val > 0 else "🔴 Negativ"
+        # Visualisierung (in Streamlit)
+        st.subheader("🔍 Einflussreiche Wörter laut SHAP (TF-IDF)")
+        fig = shap.plots.text(shap_values[0], display=False)
+        st.pyplot(fig)
 
-            
-            # Vereinfache Feature-Namen für bessere Lesbarkeit
-            if feature_name.startswith("tfidf_"):
-                display_name = f"Wort: '{feature_name[6:]}'"
-            elif feature_name.startswith("bert_"):
-                display_name = f"BERT-Dimension {feature_name[5:]}"
-            else:
-                display_name = feature_name.replace("_", " ").title()
-            
-            st.write(f"{i}. **{display_name}** {impact} (SHAP: {shap_val:.3f})")
-    
     # Zusätzliche Erklärungen basierend auf engineered features
     st.subheader("📝 Tweet-Analyse")
     
@@ -384,39 +354,6 @@ if predict_clicked and st.session_state["input_tweet"].strip():
         st.metric("Großbuchstaben-Anteil", f"{uppercase_ratio(tweet_to_predict):.1%}")
         retweet_status = "Ja" if is_retweet(tweet_to_predict) else "Nein"
         st.metric("Retweet", retweet_status)
-    
-    # Erklärung in natürlicher Sprache
-    st.subheader("💬 Erklärung in einfachen Worten")
-    
-    explanation_parts = []
-    
-    # Analysiere die wichtigsten TF-IDF Features
-    tfidf_features = [f for f in top_features if f[0].startswith("tfidf_") and np.abs(np.array(f[1])).flatten()[0] != 0]
-    if tfidf_features:
-        important_words = [f[0][6:] for f in tfidf_features[:3]]
-        explanation_parts.append(f"Wichtige Wörter: {', '.join(important_words)}")
-    
-    # Analysiere Tweet-Eigenschaften
-    if count_political_terms(tweet_to_predict) > 0:
-        explanation_parts.append(f"Der Tweet enthält {count_political_terms(tweet_to_predict)} politische Begriffe")
-    
-    if count_hashtags(tweet_to_predict) > 0:
-        explanation_parts.append(f"Verwendung von {count_hashtags(tweet_to_predict)} Hashtags")
-    
-    if is_retweet(tweet_to_predict):
-        explanation_parts.append("Es handelt sich um einen Retweet")
-    
-    if len(tweet_to_predict) > 200:
-        explanation_parts.append("Der Tweet ist relativ lang")
-    elif len(tweet_to_predict) < 50:
-        explanation_parts.append("Der Tweet ist relativ kurz")
-    
-    if explanation_parts:
-        st.write("Das Modell hat folgende Charakteristika erkannt:")
-        for part in explanation_parts:
-            st.write(f"• {part}")
-    else:
-        st.write("Das Modell basiert seine Entscheidung hauptsächlich auf komplexen Wortmustern und semantischen Bedeutungen.")
 
 st.markdown("---")
 st.caption("📌 Dieses Tool wurde im Rahmen des ML4B-Projekts entwickelt – zur Parteivorhersage deutscher Bundestags-Tweets.")
