@@ -50,6 +50,7 @@ PARTY_COLORS = {
 
 # ==== Layout ====
 st.set_page_config(page_title="Parteivorhersage", layout="wide")
+st.markdown("<style>.element-container textarea { font-size: 16px !important; } div[data-testid=stTextArea] label {display:none}</style>", unsafe_allow_html=True)
 st.title("🗳️ Parteivorhersage für Bundestags-Tweets")
 
 # ==== Seitenleiste: Parteiinformationen ====
@@ -125,7 +126,7 @@ def embed_single_text(text):
         return output.last_hidden_state[:, 0, :].squeeze().cpu().numpy().reshape(1, -1)
 
 # ==== UI ====
-tweet = st.text_area("📝 Gib einen Bundestags-Tweet ein:", height=100)
+tweet = st.text_area("", placeholder="Gib einen Bundestags-Tweet ein...", height=100)
 st.button("🔮 Vorhersagen", disabled=not tweet)
 
 if tweet:
