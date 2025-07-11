@@ -394,7 +394,7 @@ if predict_clicked and st.session_state["input_tweet"].strip():
                 if shap_val > 0:
                     st.write(f"🟢 **'{word}'** → +{shap_val:.6f}")
                 else:
-                    t pushst.write(f"🔴 **'{word}'** → {shap_val:.6f}")
+                    st.write(f"🔴 **'{word}'** → {shap_val:.6f}")
     
         # Zeige Tweet-Eigenschaften mit niedrigerer Schwelle
         st.write("**🔧 Tweet-Eigenschaften:**")
