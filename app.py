@@ -2,9 +2,9 @@ import streamlit as st
 import joblib
 import numpy as np
 import re
-import torch
-from transformers import AutoTokenizer, AutoModel
-import os # Stellen Sie sicher, dass das os-Modul importiert ist
+# import torch # Nicht mehr benötigt, da BERT-Code entfernt wurde
+# from transformers import AutoTokenizer, AutoModel # Nicht mehr benötigt, da BERT-Code entfernt wurde
+import os # Sicherstellen, dass das os-Modul importiert ist
 
 # ==== Modellkonfiguration: Jetzt nur noch die Dateien, die Sie tatsächlich behalten haben ====
 # app.py befindet sich im Verzeichnis streamlit_app/
@@ -13,10 +13,6 @@ import os # Stellen Sie sicher, dass das os-Modul importiert ist
 BASE_DIR = os.path.dirname(__file__)
 
 MODEL_OPTIONS = {
-    # Bitte wählen und kombinieren Sie die Modelloptionen entsprechend Ihren tatsächlichen Bedürfnissen
-    # Ich werde die Optionen basierend auf den von Ihnen bereitgestellten Dateinamen neu erstellen
-    # Hinweis: Dies sind spekulative Kombinationen basierend auf Ihren Modelldateien. Sie können sie an die tatsächliche Modelltraining und Verwendung anpassen
-
     # Option 1: Baseline TF-IDF Modell (angenommen unter Verwendung von lr_model_no_urls und tfidf_no_urls)
     "TF-IDF baseline (no_urls)": {
         "model": os.path.join(BASE_DIR, "models", "lr_model_no_urls.joblib"),
@@ -29,16 +25,14 @@ MODEL_OPTIONS = {
         "vectorizer": os.path.join(BASE_DIR, "models", "tfidf_extra_no_urls.joblib"), # Angenommen, dies ist der Vektorisierer für Extra Features
         "scaler": os.path.join(BASE_DIR, "models", "scaler_extra_no_urls.joblib")
     },
-    # Option 3: TF-IDF + BERT + Engineered (angenommen unter Verwendung von lr_tfidf_bert_engineered, tfidf_vectorizer_bert_engineered, feature_scaler_bert_engineered)
-    "TF-IDF + BERT + Engineered": {
-        "model": os.path.join(BASE_DIR, "models", "lr_tfidf_bert_engineered.joblib"),
-        "vectorizer": os.path.join(BASE_DIR, "models", "tfidf_vectorizer_bert_engineered.joblib"),
-        "scaler": os.path.join(BASE_DIR, "models", "feature_scaler_bert_engineered.joblib")
-    },
-    # Option 4: Kombiniertes Modell (angenommen lr_model_combined, scaler_combined)
+    # Option 3: Kombiniertes Modell (angenommen lr_model_combined, scaler_combined)
     "Combined Model": {
         "model": os.path.join(BASE_DIR, "models", "lr_model_combined.joblib"),
-        "vectorizer": os.path.join(BASE_DIR, "models", "tfidf_vectorizer_bert_engineered.joblib"), # Hier müssen Sie bestätigen, welchen Vektorisierer das kombinierte Modell verwendet
+        # Hier müssen Sie bestätigen, welchen Vektorisierer das kombinierte Modell verwendet.
+        # Wenn "Combined Model" TF-IDF verwendet, stellen Sie sicher, dass der Pfad korrekt ist.
+        # Wenn es nicht auf tfidf_vectorizer_bert_engineered.joblib angewiesen ist (da wir den BERT-Teil entfernt haben),
+        # ändern Sie dies bitte entsprechend. Wenn es keinen TF-IDF Vektorisierer benötigt, setzen Sie es auf None.
+        "vectorizer": os.path.join(BASE_DIR, "models", "tfidf_vectorizer_bert_engineered.joblib"),
         "scaler": os.path.join(BASE_DIR, "models", "scaler_combined.joblib")
     }
 }
@@ -83,20 +77,8 @@ except Exception as e: # Fängt andere mögliche Ladefehler ab, z.B. wenn die Da
     st.stop()
 
 
-use_bert = "BERT" in choice
-
-# ==== BERT (Wenn das ausgewählte Modell BERT beinhaltet, laden) ====
-if use_bert:
-    try:
-        # Hinweis: Das bert-base-german-cased Modell wird beim ersten Ausführen heruntergeladen.
-        # Wenn die Bereitstellungsumgebung keinen Netzwerkzugriff hat oder der Download fehlschlägt, tritt hier ein Fehler auf.
-        tokenizer = AutoTokenizer.from_pretrained("bert-base-german-cased")
-        bert_model = AutoModel.from_pretrained("bert-base-german-cased")
-        bert_model.eval() # Setzt das Modell in den Evaluationsmodus
-    except Exception as e:
-        st.error(f"❌ BERT Modell oder dessen Tokenizer konnte nicht geladen werden. Bitte überprüfen Sie die Netzwerkverbindung oder den Modellnamen.")
-        st.error(f"Detaillierter Fehler: {e}")
-        st.stop()
+# 'use_bert' Variable und der zugehörige BERT-Ladeblock werden entfernt,
+# da das 'TF-IDF + BERT + Engineered' Modell entfernt wurde.
 
 
 # ==== Feature Engineering (Hilfsfunktionen für Feature Engineering) ====
@@ -144,17 +126,12 @@ def extract_features(text):
     ]
     return np.array(feats).reshape(1, -1)
 
-# Bert Embedding Funktion
-def embed_single_text(text):
-    with torch.no_grad(): # Beim Inferieren sind keine Gradientenberechnungen erforderlich
-        # truncation=True schneidet zu lange Sequenzen ab, padding="max_length" füllt auf die maximale Länge auf
-        # max_length=64 ist ein Beispielwert, den Sie an die Einstellungen Ihres BERT-Modells beim Training anpassen können
-        encoded = tokenizer(text, truncation=True, padding="max_length", max_length=64, return_tensors="pt")
-        # Verschiebt die Eingabe auf dasselbe Gerät wie das Modell (z.B. GPU, falls verfügbar)
-        # Wenn keine GPU vorhanden ist, wird dies standardmäßig auf der CPU ausgeführt
-        output = bert_model(**encoded)
-        # Ruft das Embedding des [CLS]-Tokens ab und konvertiert es in ein NumPy-Array
-        return output.last_hidden_state[:, 0, :].squeeze().cpu().numpy().reshape(1, -1)
+# Bert Embedding Funktion ist nicht mehr erforderlich und wurde entfernt
+# def embed_single_text(text):
+#     with torch.no_grad():
+#         encoded = tokenizer(text, truncation=True, padding="max_length", max_length=64, return_tensors="pt")
+#         output = bert_model(**encoded)
+#         return output.last_hidden_state[:, 0, :].squeeze().cpu().numpy().reshape(1, -1)
 
 
 # ==== UI-Eingabe und Vorhersagelogik ====
@@ -174,22 +151,23 @@ if tweet and st.button("🔮 Vorhersagen"):
             st.error(f"❌ Feature Engineering oder Skalierung fehlgeschlagen: {e}")
             st.stop()
 
-    X_bert = None
-    # Sicherstellen, dass use_bert True ist und bert_model erfolgreich geladen wurde
-    if use_bert and 'bert_model' in locals():
-        try:
-            X_bert = embed_single_text(tweet)
-        except Exception as e:
-            st.error(f"❌ BERT Embedding fehlgeschlagen: {e}")
-            st.stop()
+    # X_bert ist nicht mehr relevant, da BERT-Modelle entfernt wurden
+    # X_bert = None
+    # if use_bert and 'bert_model' in locals():
+    #     try:
+    #         X_bert = embed_single_text(tweet)
+    #     except Exception as e:
+    #         st.error(f"❌ BERT Embedding fehlgeschlagen: {e}")
+    #         st.stop()
 
     # === Merkmals-Kombination ===
     # Kombiniert die Eingabedaten für das Modell basierend auf dem ausgewählten Modell und den Merkmalen
     final_features = []
     final_features.append(X_tfidf)
 
-    if X_bert is not None:
-        final_features.append(X_bert)
+    # Der BERT-Teil wird hier entfernt
+    # if X_bert is not None:
+    #     final_features.append(X_bert)
     
     if X_eng_scaled is not None:
         final_features.append(X_eng_scaled)
@@ -200,7 +178,8 @@ if tweet and st.button("🔮 Vorhersagen"):
     except ValueError as e:
         st.error(f"❌ Fehler beim Zusammenführen von Merkmalen. Bitte stellen Sie sicher, dass alle Merkmals-Arrays dimensionkompatibel sind: {e}")
         st.error(f"TF-IDF Shape: {X_tfidf.shape if 'X_tfidf' in locals() else 'N/A'}")
-        st.error(f"BERT Shape: {X_bert.shape if 'X_bert' in locals() else 'N/A'}")
+        # Der BERT-Shape-Fehler wird hier entfernt
+        # st.error(f"BERT Shape: {X_bert.shape if 'X_bert' in locals() else 'N/A'}")
         st.error(f"Engineered Scaled Shape: {X_eng_scaled.shape if 'X_eng_scaled' in locals() else 'N/A'}")
         st.stop()
 
@@ -221,4 +200,5 @@ if tweet and st.button("🔮 Vorhersagen"):
 
 
 st.markdown("---")
-st.markdown("🔍 Dieses Tool kombiniert klassische Textmerkmale (TF-IDF), BERT-Embeddings und engineered Features zur Klassifikation von Bundestags-Tweets nach Partei.")
+# Die Beschreibung wurde angepasst, da BERT-Embeddings nicht mehr verwendet werden
+st.markdown("🔍 Dieses Tool kombiniert klassische Textmerkmale (TF-IDF) und engineered Features zur Klassifikation von Bundestags-Tweets nach Partei.")
