@@ -337,104 +337,104 @@ if predict_clicked and st.session_state["input_tweet"].strip():
             else:
                 shap_values_for_prediction = shap_values
 
+        # DEBUG: Zeige Basis-Informationen
+        st.write(f"**Debug Info:** Anzahl Features: {len(shap_values_for_prediction)}")
+        st.write(f"**Debug Info:** Max SHAP-Wert: {np.max(np.abs(shap_values_for_prediction)):.6f}")
+    
         # Separate die verschiedenen Feature-Typen
         n_tfidf = len(vectorizer.get_feature_names_out())
         n_bert = 768
         n_eng = 14
-    
+        
+        st.write(f"**Debug Info:** TF-IDF Features: {n_tfidf}, BERT: {n_bert}, Engineering: {n_eng}")
+        
         # TF-IDF Features (Wörter)
         tfidf_shap = shap_values_for_prediction[:n_tfidf]
         tfidf_features = vectorizer.get_feature_names_out()
         tfidf_values = X_all[0][:n_tfidf]
-    
+        
         # BERT Features (versteckte Bedeutungen)
         bert_shap = shap_values_for_prediction[n_tfidf:n_tfidf+n_bert]
-    
+        
         # Engineered Features (Tweet-Eigenschaften)
-        eng_shap = shap_values_for_prediction[n_tfidf+n_bert:]
+        eng_shap = shap_values_for_prediction[n_tfidf+n_bert:n_tfidf+n_bert+n_eng]
         eng_feature_names = [
             "Zeichen-Anzahl", "Wort-Anzahl", "Durchschnittliche Wortlänge", "Großbuchstaben-Anteil",
             "Ausrufezeichen", "Fragezeichen", "Mehrfach-Satzzeichen", "Politische Begriffe", 
             "Emojis", "Hashtags", "Mentions", "URLs", "Punkte", "Ist Retweet"
         ]
-    
-        # Zeige wichtige Wörter
+        
+        # Zeige wichtige Wörter mit niedrigerer Schwelle
         st.write("**📝 Wichtige Wörter im Tweet:**")
-    
+        
         # Finde Wörter die tatsächlich im Tweet vorkommen
         word_impacts = []
         for i, (word, shap_val, tf_val) in enumerate(zip(tfidf_features, tfidf_shap, tfidf_values)):
-            if tf_val > 0 and abs(shap_val) > 0.001:  # Wort kommt vor und hat Einfluss
+            if tf_val > 0:  # Wort kommt vor
                 word_impacts.append((word, shap_val, tf_val))
-    
+        
+        st.write(f"**Debug Info:** Gefundene Wörter im Tweet: {len(word_impacts)}")
+        
         # Sortiere nach Wichtigkeit
         word_impacts.sort(key=lambda x: abs(x[1]), reverse=True)
+        
+        # Zeige Top 10 Wörter (mit sehr niedriger Schwelle)
+        shown_words = 0
+        for word, shap_val, tf_val in word_impacts[:15]:
+            if abs(shap_val) > 0.0001:  # Sehr niedrige Schwelle
+                if shap_val > 0:
+                    st.write(f"🟢 **'{word}'** → unterstützt {pred} (Einfluss: +{shap_val:.6f})")
+                else:
+                    st.write(f"🔴 **'{word}'** → spricht gegen {pred} (Einfluss: {shap_val:.6f})")
+                shown_words += 1
+        
+        if shown_words == 0:
+            st.write("_Zeige alle Wörter im Tweet:_")
+            for word, shap_val, tf_val in word_impacts[:10]:
+                if shap_val > 0:
+                    st.write(f"🟢 **'{word}'** → +{shap_val:.6f}")
+                else:
+                    st.write(f"🔴 **'{word}'** → {shap_val:.6f}")
     
-        # Zeige Top 8 Wörter
-        for word, shap_val, tf_val in word_impacts[:8]:
-            if shap_val > 0:
-                st.write(f"🟢 **'{word}'** → unterstützt {pred} (Einfluss: +{shap_val:.3f})")
-            else:
-                st.write(f"🔴 **'{word}'** → spricht gegen {pred} (Einfluss: {shap_val:.3f})")
-    
-        if not word_impacts:
-            st.write("_Keine spezifischen Wörter mit starkem Einfluss gefunden._")
-    
-        # Zeige Tweet-Eigenschaften
+        # Zeige Tweet-Eigenschaften mit niedrigerer Schwelle
         st.write("**🔧 Tweet-Eigenschaften:**")
-    
+        
         property_impacts = []
         for i, (prop_name, shap_val) in enumerate(zip(eng_feature_names, eng_shap)):
-            if abs(shap_val) > 0.001:  # Nur relevante Features
-                property_impacts.append((prop_name, shap_val))
-    
+            property_impacts.append((prop_name, shap_val))
+        
         property_impacts.sort(key=lambda x: abs(x[1]), reverse=True)
+        
+        shown_props = 0
+        for prop_name, shap_val in property_impacts:
+            if abs(shap_val) > 0.0001:  # Sehr niedrige Schwelle
+                if shap_val > 0:
+                    st.write(f"🟢 **{prop_name}** → unterstützt {pred} (Einfluss: +{shap_val:.6f})")
+                else:
+                    st.write(f"🔴 **{prop_name}** → spricht gegen {pred} (Einfluss: {shap_val:.6f})")
+                shown_props += 1
+        
+        if shown_props == 0:
+            st.write("_Zeige alle Tweet-Eigenschaften:_")
+            for prop_name, shap_val in property_impacts:
+                if shap_val > 0:
+                    st.write(f"🟢 **{prop_name}** → +{shap_val:.6f}")
+                else:
+                    st.write(f"🔴 **{prop_name}** → {shap_val:.6f}")
     
-        for prop_name, shap_val in property_impacts[:5]:
-            if shap_val > 0:
-                st.write(f"🟢 **{prop_name}** → unterstützt {pred} (Einfluss: +{shap_val:.3f})")
-            else:
-                st.write(f"🔴 **{prop_name}** → spricht gegen {pred} (Einfluss: {shap_val:.3f})")
+    # Zeige auch die Top absoluten SHAP-Werte aller Features
+    st.write("**🎯 Top 10 einflussreichste Features (alle Typen):**")
+    all_features = list(tfidf_features) + [f"BERT_{i}" for i in range(768)] + eng_feature_names
+    all_shap = list(tfidf_shap) + list(bert_shap) + list(eng_shap)
     
-        if not property_impacts:
-            st.write("_Keine Tweet-Eigenschaften mit starkem Einfluss._")
+    feature_impacts = list(zip(all_features, all_shap))
+    feature_impacts.sort(key=lambda x: abs(x[1]), reverse=True)
     
-        # Zeige BERT-Einfluss (zusammengefasst)
-        bert_total_impact = np.sum(np.abs(bert_shap))
-        if bert_total_impact > 0.01:
-            st.write("**🧠 Semantische Bedeutung:**")
-            st.write(f"Die versteckten Sprachmuster haben einen Gesamteinfluss von {bert_total_impact:.3f} auf die Entscheidung.")
-    
-        # Erstelle eine einfache Visualisierung
-        if word_impacts:
-            st.write("**📊 Wort-Einfluss Visualisierung:**")
-        
-            # Bereite Daten für Visualisierung vor
-            top_words = word_impacts[:6]  # Top 6 für bessere Darstellung
-            words = [w[0] for w in top_words]
-            impacts = [w[1] for w in top_words]
-            colors = ['green' if imp > 0 else 'red' for imp in impacts]
-        
-            # Erstelle DataFrame für Plotting
-            df_viz = pd.DataFrame({
-                'Wort': words,
-                'Einfluss': impacts,
-                'Farbe': colors
-            })
-        
-            # Einfacher Balkenplot
-            fig, ax = plt.subplots(figsize=(10, 6))
-            bars = ax.barh(words, impacts, color=colors, alpha=0.7)
-            ax.set_xlabel('SHAP-Wert (Einfluss auf Vorhersage)')
-            ax.set_title(f'Wort-Einfluss für Vorhersage: {pred}')
-            ax.axvline(x=0, color='black', linestyle='-', alpha=0.3)
-        
-            # Füge Werte zu den Balken hinzu
-            for i, (bar, impact) in enumerate(zip(bars, impacts)):
-                ax.text(impact + (0.001 if impact > 0 else -0.001), i, f'{impact:.3f}', va='center', ha='left' if impact > 0 else 'right')
-        
-            plt.tight_layout()
-            st.pyplot(fig)
+    for i, (feature, shap_val) in enumerate(feature_impacts[:10]):
+        if shap_val > 0:
+            st.write(f"{i+1}. 🟢 **{feature}** → +{shap_val:.6f}")
+        else:
+            st.write(f"{i+1}. 🔴 **{feature}** → {shap_val:.6f}")
 
     # Zusätzliche Erklärungen basierend auf engineered features
     st.subheader("📝 Tweet-Analyse")
