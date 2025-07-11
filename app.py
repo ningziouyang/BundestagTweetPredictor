@@ -165,9 +165,9 @@ def embed_single_text(text):
         output = bert_model(**encoded)
         return output.last_hidden_state[:, 0, :].squeeze().cpu().numpy().reshape(1, -1)
 
-# ==== UI: Auswahl + Textfeld + Buttons ====
-if "tweet_input" not in st.session_state:
-    st.session_state.tweet_input = ""
+# ==== UI: Text + Thema + Buttons ====
+if "input_area" not in st.session_state:
+    st.session_state["input_area"] = ""
 
 thema = st.selectbox("📂 Wähle ein Thema:", list(SAMPLE_TWEET_CATEGORIES.keys()))
 
@@ -178,11 +178,11 @@ with col1:
         placeholder="Gib einen Bundestags-Tweet ein...",
         height=100,
         label_visibility="collapsed",
-        key="tweet_input"
+        key="input_area"
     )
 with col2:
     if st.button("🔄 Beispiel-Tweet laden"):
-        st.session_state.tweet_input = random.choice(SAMPLE_TWEET_CATEGORIES[thema])
+        st.session_state["input_area"] = random.choice(SAMPLE_TWEET_CATEGORIES[thema])
 
 predict_clicked = st.button("🔮 Vorhersagen")
 
