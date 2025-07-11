@@ -5,6 +5,51 @@ import re
 import torch
 from transformers import AutoTokenizer, AutoModel
 import pandas as pd
+import random
+
+# ==== Beispiel-Tweets nach Themen ====
+SAMPLE_TWEET_CATEGORIES = {
+    "Klima": [
+        "Klimaschutz muss höchste Priorität haben – für unsere Zukunft.",
+        "Wir brauchen eine echte Energiewende, nicht nur leere Versprechen."
+    ],
+    "Migration": [
+        "Grenzen sichern heißt Verantwortung übernehmen.",
+        "Integration gelingt nur mit klaren Regeln und Erwartungen."
+    ],
+    "Soziales": [
+        "Gerechtigkeit heißt: faire Löhne und sichere Renten.",
+        "Das Bürgergeld stärkt den sozialen Zusammenhalt."
+    ],
+    "Wirtschaft": [
+        "Wir entlasten den Mittelstand und senken die Steuerlast.",
+        "Innovationen und Unternehmertum sind der Schlüssel für Wachstum."
+    ],
+    "Digitales": [
+        "Deutschland braucht flächendeckendes Glasfaser und 5G – jetzt!",
+        "Künstliche Intelligenz bietet große Chancen für unsere Wirtschaft."
+    ],
+    "Bildung": [
+        "Bildung darf nicht vom Geldbeutel der Eltern abhängen.",
+        "Mehr Lehrer, bessere Ausstattung – wir investieren in die Zukunft."
+    ],
+    "Europa": [
+        "Ein starkes Europa ist unser Garant für Frieden und Wohlstand.",
+        "Wir stehen zu unserer Verantwortung in der EU."
+    ],
+    "Sicherheit": [
+        "Mehr Mittel für Polizei und Justiz – für Ihre Sicherheit.",
+        "Wir stärken die Bundeswehr und unsere Verteidigungsfähigkeit."
+    ],
+    "Freiheit": [
+        "Freiheit und Grundrechte sind nicht verhandelbar.",
+        "Wir setzen uns gegen jede Form der Zensur ein."
+    ],
+    "Gesundheit": [
+        "Pflegekräfte verdienen mehr Wertschätzung – und bessere Löhne.",
+        "Ein stabiles Gesundheitssystem ist keine Selbstverständlichkeit."
+    ]
+}
 
 # ==== Modelloptionen ====
 MODEL_OPTIONS = {
@@ -120,14 +165,24 @@ def embed_single_text(text):
         output = bert_model(**encoded)
         return output.last_hidden_state[:, 0, :].squeeze().cpu().numpy().reshape(1, -1)
 
-# ==== UI ====
-tweet = st.text_area(
-    label="",
-    placeholder="Gib einen Bundestags-Tweet ein...",
-    height=100,
-    label_visibility="collapsed",
-    key="tweet_input"
-)
+# ==== UI: Auswahl + Textfeld + Buttons ====
+if "tweet_input" not in st.session_state:
+    st.session_state.tweet_input = ""
+
+thema = st.selectbox("📂 Wähle ein Thema:", list(SAMPLE_TWEET_CATEGORIES.keys()))
+
+col1, col2 = st.columns([3, 1])
+with col1:
+    tweet = st.text_area(
+        label="",
+        placeholder="Gib einen Bundestags-Tweet ein...",
+        height=100,
+        label_visibility="collapsed",
+        key="tweet_input"
+    )
+with col2:
+    if st.button("🔄 Beispiel-Tweet laden"):
+        st.session_state.tweet_input = random.choice(SAMPLE_TWEET_CATEGORIES[thema])
 
 predict_clicked = st.button("🔮 Vorhersagen")
 
