@@ -124,29 +124,29 @@ st.markdown("""
 # ==== Beispiel-Tweets nach Themen ====
 SAMPLE_TWEET_CATEGORIES = {
     "Klima & Umwelt": [
-        "Klimaschutz muss höchste Priorität haben – für unsere Zukunft.",
-        "Wir brauchen eine echte Energiewende, nicht nur leere Versprechen.",
-        "Erneuerbare Energien sind der Schlüssel für eine saubere Zukunft."
+        "Umstellung auf E-Mobilität gefährdet 410.000 Arbeitsplätze – wir brauchen klare Zukunftsperspektiven.",
+        "Die verheerende #Dürre in Ostafrika ist keine Naturkatastrophe – sie ist menschengemacht.",
+        "#Klimapaket, #GroKo: Echte Klimasünder heranziehen statt Symbolpolitik!"
     ],
     "Migration & Integration": [
-        "Grenzen sichern heißt Verantwortung übernehmen.",
-        "Integration gelingt nur mit klaren Regeln und Erwartungen.",
-        "Wir müssen sowohl humanitär als auch pragmatisch handeln."
+        "Es macht traurig und wütend: Flüchtlinge sterben, während Europa zusieht.",
+        "WTF! Nazis werfen bombenbauanleitungen mit auf Geflüchtete – was ist los in diesem Land?",
+        "Damit die Verwaltung vom ganzen Wert der #Vielfalt profitieren kann, braucht sie Diversitätskompetenz."
     ],
     "Soziales & Gerechtigkeit": [
-        "Gerechtigkeit heißt: faire Löhne und sichere Renten.",
-        "Das Bürgergeld stärkt den sozialen Zusammenhalt.",
-        "Niemand darf in Deutschland in Armut leben müssen."
+        "#Kolb strudelt auf @DLF zum #Armutsbericht!",
+        "#Solidaritätszuschlag war & bleibt eine notwendige Maßnahme zur Finanzierung von Gerechtigkeit.",
+        "Bruno Kreisky, Bundeskanzler Österreichs, Sozialsystem und Mitgefühl – ein Vorbild bis heute."
     ],
     "Wirtschaft & Finanzen": [
-        "Wir entlasten den Mittelstand und senken die Steuerlast.",
-        "Innovationen und Unternehmertum sind der Schlüssel für Wachstum.",
-        "Die soziale Marktwirtschaft ist unser bewährtes Modell."
+        "Schwarz-Gelb hat in NRW abgewirtschaftet, Wachstum stagniert – kein Plan für Zukunft sichtbar.",
+        "Es braucht mehr als eine Frau im Vorstand! Und zwar überall – nicht nur als Symbol.",
+        "Es braucht ein #Lieferkettengesetz! Weniger als Menschenrechte darf nicht drin sein."
     ],
     "Digitalisierung & Bildung": [
-        "Deutschland braucht flächendeckendes Glasfaser und 5G – jetzt!",
-        "Künstliche Intelligenz bietet große Chancen für unsere Wirtschaft.",
-        "Bildung ist die wichtigste Investition in unsere Zukunft."
+        "Es fehlt nicht an Engagement, sondern an Ressourcen – Bildung braucht digitale Infrastruktur.",
+        "Internetauftritt der Berliner Kampagne 'MOBIL GEGEN HÄUSLICHE GEWALT' – Berichterstattung bei radioeins, Interview...",
+        "#Buerotweet: Statement von Halina zur Farce um die Vergabe von Gutachten in der Internet-Enquete heute Mittag."
     ]
 }
 
