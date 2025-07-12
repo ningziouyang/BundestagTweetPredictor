@@ -18,7 +18,7 @@ warnings.filterwarnings('ignore')
 
 # ==== Styling und Layout ====
 st.set_page_config(
-    page_title="🗳️ Tweetseek - Parteivorhersage",
+    page_title="Tweetseek - Parteivorhersage",
     page_icon="🗳️",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -94,6 +94,19 @@ st.markdown("""
         margin-bottom: 2rem;
         font-size: 2.5rem;
         font-weight: bold;
+    }
+    
+    /* Verstecke Header-Links */
+    .element-container .stMarkdown h1 a,
+    .element-container .stMarkdown h2 a,
+    .element-container .stMarkdown h3 a,
+    .element-container .stMarkdown h4 a {
+        display: none !important;
+    }
+    
+    /* Alternative: Verstecke alle Header-Anchor-Links */
+    .stMarkdown .anchor-link {
+        display: none !important;
     }
     
     /* Party Colors */
@@ -175,9 +188,9 @@ with st.sidebar:
     st.markdown("## 📊 Modell-Info")
     st.info("""
     **Modell**: XGBoost mit kombinierten Features
-    - 🔤 TF-IDF Textanalyse
-    - 🧠 BERT Embeddings  
-    - 📈 Engineered Features
+    - TF-IDF Textanalyse
+    - BERT Embeddings  
+    - Engineered Features
     
     **Genauigkeit**: ~35% bei 8 Parteien
     """)
@@ -296,8 +309,7 @@ def setup_lime():
     explainer = LimeTextExplainer(
         class_names=label_encoder.classes_,
         feature_selection='auto',
-        verbose=False,
-        mode='classification'
+        verbose=False
     )
     return explainer
 
@@ -313,8 +325,8 @@ def lime_predict_fn(texts):
             results.append(np.ones(len(label_encoder.classes_)) / len(label_encoder.classes_))
     return np.array(results)
 
-def get_lime_explanation(text, num_features=10):
-    """LIME Erklärung für einen Text generieren"""
+def get_lime_explanation(text, predicted_party, num_features=10):
+    """LIME Erklärung für einen Text generieren - einfache und robuste Version"""
     explainer = setup_lime()
     
     with st.spinner("🔍 Analysiere Worteinflüsse mit LIME..."):
@@ -322,27 +334,38 @@ def get_lime_explanation(text, num_features=10):
             text, 
             lime_predict_fn, 
             num_features=num_features,
-            num_samples=500  # Reduziert für bessere Performance
+            num_samples=300  # Reduziert für bessere Performance
         )
     
-    return explanation
+    # Finde den Index der vorhergesagten Partei
+    predicted_class_idx = np.where(label_encoder.classes_ == predicted_party)[0][0]
+    
+    # Extrahiere die Erklärung für die vorhergesagte Partei
+    if predicted_class_idx in explanation.available_labels():
+        # Nutze die Erklärung für die spezifische Partei
+        word_weights = explanation.as_list(label=predicted_class_idx)
+    else:
+        # Fallback: Nutze die Standard-Erklärung
+        word_weights = explanation.as_list()
+    
+    return word_weights, predicted_party
 
 # ==== UI: Hauptbereich ====
-col1, col2 = st.columns([2, 1])
+st.markdown("### 📝 Tweet eingeben")
 
-with col1:
-    st.markdown("### 📝 Tweet eingeben")
-    
-    # Thema-Auswahl
+# Thema-Auswahl und Button in gleicher Reihe
+theme_col, button_col = st.columns([3, 1])
+
+with theme_col:
     selected_theme = st.selectbox(
         "🎯 Wähle ein Thema für Beispiele:",
         list(SAMPLE_TWEET_CATEGORIES.keys()),
         help="Wähle ein politisches Thema, um passende Beispiel-Tweets zu laden"
     )
 
-with col2:
-    st.markdown("### 🎲 Beispiel laden")
-    if st.button("🔄 Zufälliger Beispiel-Tweet", help="Lädt einen zufälligen Tweet aus der gewählten Kategorie"):
+with button_col:
+    st.markdown("<br>", unsafe_allow_html=True)  # Spacing für Alignment
+    if st.button("🔄 Beispiel laden", help="Lädt einen zufälligen Tweet aus der gewählten Kategorie"):
         if "input_tweet" not in st.session_state:
             st.session_state["input_tweet"] = ""
         st.session_state["input_tweet"] = random.choice(SAMPLE_TWEET_CATEGORIES[selected_theme])
@@ -384,12 +407,12 @@ if (predict_clicked or both_clicked or explain_clicked) and st.session_state["in
     if len(tweet_to_predict) < 10:
         st.warning("⚠️ Der Tweet ist sehr kurz. Längere Texte liefern meist bessere Vorhersagen.")
     
-    # Vorhersage ausführen
+    # Vorhersage ausführen (wird für beide Fälle benötigt)
+    with st.spinner("🤖 Analysiere Tweet..."):
+        pred, probs, X_all = predict_with_all_features(tweet_to_predict)
+    
+    # ==== Ergebnisse anzeigen ====
     if predict_clicked or both_clicked:
-        with st.spinner("🤖 Analysiere Tweet..."):
-            pred, probs, X_all = predict_with_all_features(tweet_to_predict)
-        
-        # ==== Ergebnisse anzeigen ====
         st.markdown("---")
         st.markdown("## 🎯 Vorhersage-Ergebnisse")
         
@@ -458,17 +481,13 @@ if (predict_clicked or both_clicked or explain_clicked) and st.session_state["in
         st.markdown("## 🔍 LIME-Erklärung: Worteinflüsse")
         
         try:
-            explanation = get_lime_explanation(tweet_to_predict, num_features=10)
-            
-            # LIME Ergebnisse verarbeiten
-            word_weights = explanation.as_list()
-            predicted_class = explanation.available_labels()[0]
-            predicted_party = label_encoder.inverse_transform([predicted_class])[0]
+            # Übergebe die vorhergesagte Partei an LIME
+            word_weights, analyzed_party = get_lime_explanation(tweet_to_predict, pred, num_features=10)
             
             col1, col2 = st.columns([2, 1])
             
             with col1:
-                st.markdown(f"### 📝 Worteinflüsse für Vorhersage: **{predicted_party}**")
+                st.markdown(f"### 📝 Worteinflüsse für Vorhersage: **{analyzed_party}**")
                 
                 # Wort-Gewichte Tabelle
                 if word_weights:
@@ -504,19 +523,14 @@ if (predict_clicked or both_clicked or explain_clicked) and st.session_state["in
             
             with col2:
                 st.markdown("### ℹ️ LIME-Erklärung")
-                st.info("""
-                **LIME** (Local Interpretable Model-agnostic Explanations) zeigt:
+                st.info(f"""
+                **LIME** analysiert für: **{analyzed_party}**
                 
-                🟢 **Positive Werte**: Wörter, die für diese Partei sprechen
+                **Positive Werte**: Wörter, die für diese Partei sprechen
                 
-                🔴 **Negative Werte**: Wörter, die gegen diese Partei sprechen
+                **Negative Werte**: Wörter, die gegen diese Partei sprechen
                 
-                📊 **Stärke**: Je größer der Betrag, desto wichtiger das Wort
-                """)
-                
-                # Performance-Hinweis
-                st.warning("""
-                ⏱️ **Hinweis**: LIME-Analysen dauern länger, da das Modell hunderte Text-Variationen analysiert.
+                **Stärke**: Je größer der Betrag, desto wichtiger das Wort
                 """)
         
         except Exception as e:
